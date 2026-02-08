@@ -1,83 +1,100 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI POKEMON WORLD</title>
+    <title>AI MONSTER WORLD</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-        body { font-family: 'Press Start 2P', cursive; background: #111; color: #fff; overflow: hidden; }
-        #gameCanvas { border: 4px solid #444; background: #000; image-rendering: pixelated; }
-        .battle-overlay { display: none; background: rgba(0,0,0,0.9); position: absolute; top:0; left:0; width:100%; height:100%; }
-        .active { display: flex !important; }
+        body { font-family: 'Press Start 2P', cursive; background: #1a1a2e; color: #fff; overflow: hidden; }
+        #gameWorld { 
+            background: url('https://pollinations.ai/p/vibrant-pixel-art-pokemon-forest-map?width=1024&height=512&seed=123') center;
+            background-size: cover; height: 60vh; position: relative; border-bottom: 8px solid #000;
+        }
+        #player { width: 64px; height: 64px; position: absolute; transition: all 0.1s; image-rendering: pixelated; z-index: 10; }
+        .walking { animation: bounce 0.3s infinite; }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .battle-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 50; flex-direction: column; align-items: center; justify-content: center; }
     </style>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen">
-    <div class="mb-4 text-[10px]">USE ARROW KEYS TO WALK - FIND THE BOSS</div>
-    
-    <div class="relative">
-        <canvas id="gameCanvas" width="600" height="400"></canvas>
+<body>
+    <div id="gameWorld">
+        <img id="player" src="https://pollinations.ai/p/pixel-art-boy-trainer-sprite-walking?width=64&height=64&nologo=true" style="top: 50%; left: 50%;">
+    </div>
 
-        <div id="battleScreen" class="battle-overlay flex-col items-center justify-center p-10">
-            <h2 id="battleText" class="text-sm mb-10 text-center"></h2>
-            <img id="enemySprite" src="" class="w-48 h-48 mb-8 animate-bounce">
-            <div class="flex gap-4">
-                <button onclick="endBattle()" class="bg-red-600 p-4 text-[10px]">RUN AWAY</button>
-            </div>
+    <div id="battleOverlay" class="battle-overlay p-10 text-center">
+        <h2 id="enemyTitle" class="text-xl mb-4 text-red-500"></h2>
+        <div class="bg-white/10 p-4 rounded-xl mb-6">
+            <img id="enemySprite" src="" class="w-48 h-48 mx-auto animate-pulse">
+        </div>
+        <div class="flex gap-4">
+            <button onclick="doBattle('Attack')" class="bg-red-600 hover:bg-red-700 p-4 text-[10px] border-b-4 border-red-900">ATTACK</button>
+            <button onclick="doBattle('Skill')" class="bg-blue-600 hover:bg-blue-700 p-4 text-[10px] border-b-4 border-blue-900">SKILL</button>
         </div>
     </div>
 
+    <div class="p-6 bg-slate-900 h-[40vh] border-t-4 border-slate-700">
+        <div class="mb-4 text-blue-400 text-[8px]">PROGRESS: <span id="progText">0</span>%</div>
+        <div id="log" class="text-[10px] leading-loose">Use ARROW KEYS to explore! A wild encounter will trigger as you walk.</div>
+    </div>
+
     <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const battleScreen = document.getElementById('battleScreen');
-        
-        let player = { x: 300, y: 200, steps: 0 };
-        let mapImg = new Image();
-        mapImg.src = "https://pollinations.ai/p/{{ state.map_theme|urlencode }}?width=1024&height=1024&model=turbo&seed=42";
-        
-        let playerImg = new Image();
-        playerImg.src = "https://pollinations.ai/p/pixel%20art%20boy%20trainer%20sprite%20facing%20forward?width=64&height=64&nologo=true";
+        const player = document.getElementById('player');
+        const battleOverlay = document.getElementById('battleOverlay');
+        let x = 50, y = 50, steps = 0, isBattling = false;
 
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // Draw Map
-            ctx.drawImage(mapImg, 0, 0, canvas.width, canvas.height);
-            // Draw Player (with a slight "walk" bounce)
-            const bounce = Math.sin(Date.now() / 100) * 5;
-            ctx.drawImage(playerImg, player.x, player.y + bounce, 40, 40);
-            requestAnimationFrame(draw);
-        }
-
-        window.addEventListener('keydown', async (e) => {
-            if (battleScreen.classList.contains('active')) return;
+        window.addEventListener('keydown', (e) => {
+            if (isBattling) return;
+            player.classList.add('walking');
+            if(e.key === "ArrowUp") y -= 2;
+            if(e.key === "ArrowDown") y += 2;
+            if(e.key === "ArrowLeft") x -= 2;
+            if(e.key === "ArrowRight") x += 2;
             
-            const speed = 10;
-            if (e.key === "ArrowUp") player.y -= speed;
-            if (e.key === "ArrowDown") player.y += speed;
-            if (e.key === "ArrowLeft") player.x -= speed;
-            if (e.key === "ArrowRight") player.x += speed;
-
-            player.steps++;
-            if (player.steps > 30) { // Trigger encounter every 30 movements
-                player.steps = 0;
-                const res = await fetch('/encounter', {method: 'POST'});
-                const data = await res.json();
-                startBattle(data);
-            }
+            // Keep player on screen
+            x = Math.max(5, Math.min(95, x));
+            y = Math.max(5, Math.min(95, y));
+            
+            player.style.top = y + "%"; 
+            player.style.left = x + "%";
+            
+            steps++;
+            if (steps > 25) { steps = 0; triggerEncounter(); }
         });
 
-        function startBattle(data) {
-            document.getElementById('battleText').innerText = data.log;
-            document.getElementById('enemySprite').src = `https://pollinations.ai/p/${encodeURIComponent(data.current_enemy.sprite)}?width=300&height=300&model=turbo`;
-            battleScreen.classList.add('active');
+        window.addEventListener('keyup', () => player.classList.remove('walking'));
+
+        async function triggerEncounter() {
+            isBattling = true;
+            document.getElementById('log').innerText = "Scanning for enemies...";
+            
+            const formData = new FormData();
+            formData.append('action', 'Explore');
+            
+            const res = await fetch('/action', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            if (data.current_enemy) {
+                document.getElementById('enemyTitle').innerText = data.current_enemy.name;
+                document.getElementById('enemySprite').src = `https://pollinations.ai/p/${encodeURIComponent(data.current_enemy.sprite)}?width=300&height=300&model=turbo`;
+                battleOverlay.style.display = 'flex';
+                document.getElementById('log').innerText = data.log;
+            } else {
+                isBattling = false;
+            }
         }
 
-        function endBattle() {
-            fetch('/reset', {method: 'POST'});
-            battleScreen.classList.remove('active');
+        async function doBattle(act) {
+            const formData = new FormData();
+            formData.append('action', act);
+            
+            const res = await fetch('/action', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            document.getElementById('progText').innerText = data.progress;
+            document.getElementById('log').innerText = data.log;
+            battleOverlay.style.display = 'none';
+            isBattling = false;
         }
-
-        mapImg.onload = draw;
     </script>
 </body>
 </html>
