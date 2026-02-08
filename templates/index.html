@@ -1,79 +1,68 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI MONSTER RPG</title>
+    <title>AI RPG</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Press Start 2P', cursive; background: #0f172a; color: #fff; overflow: hidden; }
-        .world { background: url('https://pollinations.ai/p/vibrant-pixel-art-forest-landscape?width=1024&height=512&seed=5') center; background-size: cover; height: 50vh; position: relative; border-bottom: 4px solid #fff; }
-        #player { width: 64px; height: 64px; position: absolute; transition: all 0.1s; image-rendering: pixelated; }
-        .battle-ui { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; flex-direction: column; align-items: center; justify-content: center; }
-        .active { display: flex !important; }
+        body { font-family: monospace; background: #000; color: #0f0; overflow: hidden; }
+        .active { display: block !important; }
     </style>
 </head>
-<body>
-    <div class="world" id="world">
-        <img id="player" src="https://pollinations.ai/p/pixel-art-trainer-front?width=64&height=64&nologo=true" style="top: 50%; left: 50%;">
+<body class="p-4">
+    <div id="exploreView" class="h-64 bg-zinc-900 flex items-center justify-center border-2 border-green-900 relative">
+        <div id="player" class="absolute bg-green-500 w-8 h-8 transition-all duration-100"></div>
+        <p id="walkMsg">Use Arrows to Walk</p>
     </div>
 
-    <div id="battleBox" class="battle-ui p-6">
-        <div class="bg-white text-black p-4 rounded-lg border-4 border-blue-500 mb-4 w-80">
-            <p id="enemyName" class="text-[8px] mb-2"></p>
-            <div class="w-full bg-gray-300 h-2"><div id="enemyBar" class="bg-green-500 h-full"></div></div>
+    <div id="battleView" class="hidden fixed inset-0 bg-black z-50 p-10 flex-col items-center">
+        <h1 id="eName" class="text-xl mb-4 text-white"></h1>
+        <div class="w-64 h-64 border-4 border-white mb-6 bg-white flex items-center justify-center">
+            <img id="eImg" src="" class="max-w-full max-h-full" style="image-rendering: pixelated;">
         </div>
-        <img id="enemySprite" src="" class="w-48 h-48 mb-6 animate-bounce">
-        <div id="moveContainer" class="grid grid-cols-2 gap-2 w-full max-w-sm"></div>
+        <div id="moves" class="grid grid-cols-2 gap-4 w-full max-w-md"></div>
     </div>
 
-    <div class="p-6 bg-slate-900 h-[50vh]">
-        <div class="text-[8px] text-green-400 mb-2">PLAYER HP: <span id="pHP">100</span></div>
-        <div id="log" class="text-[10px] leading-relaxed mb-4">Arrows to walk. Find the monsters!</div>
+    <div class="mt-4 p-4 border-2 border-green-900">
+        <p class="text-xs">HP: <span id="hp">100</span> | LOG: <span id="log"></span></p>
     </div>
 
     <script>
-        let x = 50, y = 50, steps = 0, isBattling = false;
+        let x=50, y=50, steps=0, battling=false;
         const player = document.getElementById('player');
 
         window.addEventListener('keydown', (e) => {
-            if (isBattling) return;
-            if(e.key === "ArrowUp") y -= 3;
-            if(e.key === "ArrowDown") y += 3;
-            if(e.key === "ArrowLeft") x -= 3;
-            if(e.key === "ArrowRight") x += 3;
-            player.style.top = y + "%"; player.style.left = x + "%";
-            steps++;
-            if(steps > 20) { steps = 0; sendAction('Explore'); }
+            if (battling) return;
+            if(e.key.includes("Arrow")) {
+                if(e.key === "ArrowUp") y-=5; if(e.key === "ArrowDown") y+=5;
+                if(e.key === "ArrowLeft") x-=5; if(e.key === "ArrowRight") x+=5;
+                player.style.top = y+"%"; player.style.left = x+"%";
+                steps++; if(steps > 15) { steps=0; send('Explore'); }
+            }
         });
 
-        async function sendAction(act) {
-            const body = new URLSearchParams({'action': act});
-            const res = await fetch('/action', {method: 'POST', body});
+        async function send(act) {
+            const res = await fetch('/action', {method: 'POST', body: new URLSearchParams({'action': act})});
             const state = await res.json();
-            updateUI(state);
-        }
-
-        function updateUI(state) {
             document.getElementById('log').innerText = state.log;
-            document.getElementById('pHP').innerText = state.player_hp;
-            
+            document.getElementById('hp').innerText = state.player_hp;
+
             if (state.mode === "BATTLE") {
-                isBattling = true;
-                document.getElementById('battleBox').classList.add('active');
-                document.getElementById('enemyName').innerText = state.enemy.name;
-                document.getElementById('enemyBar').style.width = state.enemy.hp + "%";
-                // Fixed Image URL Generation
-                const prompt = encodeURIComponent(state.enemy.sprite + " pokemon style white background");
-                document.getElementById('enemySprite').src = `https://pollinations.ai/p/${prompt}?width=400&height=400&nologo=true&seed=${Math.random()}`;
+                battling = true;
+                document.getElementById('battleView').classList.add('active');
+                document.getElementById('eName').innerText = state.enemy.name;
                 
-                const mc = document.getElementById('moveContainer');
-                mc.innerHTML = '';
+                // IMAGE URL CONSTRUCTOR
+                const cleanPrompt = state.enemy.sprite.replace(/\s+/g, '-');
+                const imgUrl = `https://pollinations.ai/p/${cleanPrompt}?width=300&height=300&seed=${Math.floor(Math.random()*1000)}&nologo=true`;
+                document.getElementById('eImg').src = imgUrl;
+
+                const mDiv = document.getElementById('moves'); mDiv.innerHTML = '';
                 state.enemy.moves.forEach(m => {
-                    mc.innerHTML += `<button onclick="sendAction('${m}')" class="bg-blue-600 p-2 text-[8px] border-b-4 border-blue-900">${m}</button>`;
+                    mDiv.innerHTML += `<button onclick="send('${m}')" class="bg-white text-black p-2 border-2 border-gray-500">${m}</button>`;
                 });
             } else {
-                isBattling = false;
-                document.getElementById('battleBox').classList.remove('active');
+                battling = false;
+                document.getElementById('battleView').classList.remove('active');
             }
         }
     </script>
