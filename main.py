@@ -1,7 +1,4 @@
-import os
-import json
-import urllib.parse
-import google.generativeai as genai
+import os, json, urllib.parse, google.generativeai as genai
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -12,14 +9,7 @@ templates = Jinja2Templates(directory="templates")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-2.5-flash')
 
-# State now includes actual battle mechanics
-game_state = {
-    "mode": "EXPLORE",
-    "log": "Use Arrow Keys to find a challenge!",
-    "player_hp": 100,
-    "enemy": None,
-    "map_seed": 1
-}
+game_state = {"mode": "EXPLORE", "log": "Walk to find a monster!", "player_hp": 100, "enemy": None}
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -28,43 +18,24 @@ async def index(request: Request):
 @app.post("/action")
 async def take_action(request: Request, action: str = Form(...)):
     global game_state
-    
-    # 1. Handle Battle Logic
-    if game_state["mode"] == "BATTLE" and action not in ["Explore"]:
-        # AI decides the outcome of the specific move
-        prompt = f"Battle! Player uses {action} against {game_state['enemy']['name']}. " \
-                 f"Enemy HP: {game_state['enemy']['hp']}. Player HP: {game_state['player_hp']}. " \
-                 "Output ONLY JSON: {'damage': int, 'enemy_move': 'string', 'player_dmg': int, 'text': 'string'}"
-        
+    if game_state["mode"] == "BATTLE" and action != "Explore":
+        prompt = f"Outcome of {action} vs {game_state['enemy']['name']}. Enemy HP: {game_state['enemy']['hp']}. JSON: {{'dmg': int, 'p_dmg': int, 'text': 'str'}}"
         try:
             res = await model.generate_content_async(prompt)
             data = json.loads(res.text.replace('```json', '').replace('```', '').strip())
-            
-            game_state["enemy"]["hp"] -= data['damage']
-            game_state["player_hp"] -= data['player_dmg']
-            game_state["log"] = f"{data['text']} {game_state['enemy']['name']} used {data['enemy_move']}!"
-            
+            game_state["enemy"]["hp"] -= data['dmg']
+            game_state["player_hp"] -= data['p_dmg']
+            game_state["log"] = data['text']
             if game_state["enemy"]["hp"] <= 0:
-                game_state["mode"] = "EXPLORE"
-                game_state["log"] = f"Victory! You defeated {game_state['enemy']['name']}!"
-                game_state["enemy"] = None
-        except:
-            game_state["log"] = "The clash was intense! Try again."
-        
+                game_state["mode"], game_state["enemy"] = "EXPLORE", None
+                game_state["log"] = "Victory!"
+        except: game_state["log"] = "The battle rages!"
         return game_state
 
-    # 2. Trigger New Encounter
-    prompt = "Create a unique Pokemon-style encounter. Output ONLY JSON: " \
-             "{'name': 'Creature', 'hp': 100, 'moves': ['Move1', 'Move2'], 'sprite': 'short visual description', 'story': 'string'}"
-    
+    prompt = "New Pokemon. JSON: {'name': 'str', 'hp': 100, 'moves': ['m1', 'm2'], 'sprite': '3-word description'}"
     try:
-        response = await model.generate_content_async(prompt)
-        data = json.loads(response.text.replace('```json', '').replace('```', '').strip())
-        
-        game_state["mode"] = "BATTLE"
-        game_state["enemy"] = data
-        game_state["log"] = data["story"]
-    except:
-        game_state["log"] = "Something stirs in the shadows..."
-
+        res = await model.generate_content_async(prompt)
+        data = json.loads(res.text.replace('```json', '').replace('```', '').strip())
+        game_state.update({"mode": "BATTLE", "enemy": data, "log": f"A wild {data['name']} appeared!"})
+    except: game_state["log"] = "Something is hiding..."
     return game_state
