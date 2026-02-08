@@ -8,8 +8,15 @@ from fastapi.templating import Jinja2Templates
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-2.5-flash') # Using Flash for speed
+# This covers both common variable names used by different SDK versions
+api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+
+if not api_key:
+    raise ValueError("No API Key found! Check your Koyeb Environment Variables.")
+
+genai.configure(api_key=api_key)
+# Stick with 'gemini-2.5-flash' for the best speed/logic balance
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 game_state = {
     "player": {"hp": 100, "level": 1},
