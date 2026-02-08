@@ -8,83 +8,58 @@ from fastapi.templating import Jinja2Templates
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# Initialize Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-2.5-flash') # Using Flash for speed
 
-# INITIAL STATE
 game_state = {
-    "player": {"name": "Thomas Jr.", "hp": 100},
-    "collection": [],
+    "player": {"hp": 100, "level": 1},
     "progress": 0,
-    "mission": "Defeat the Void Monarch and restore the Prism Core.",
     "current_enemy": None,
-    "log": "The world is fading. You are the last hope.",
-    "is_victory": False
+    "log": "A new journey begins in high definition!",
+    "bg_image": "vibrant lush pokemon forest battle background"
 }
-
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
 
 @app.post("/action")
 async def take_action(request: Request, action: str = Form(...)):
     global game_state
     
-    # 1. Reset Game if finished
-    if action == "Restart":
-        game_state["progress"] = 0
-        game_state["collection"] = []
-        game_state["is_victory"] = False
-        game_state["current_enemy"] = None
-        return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
-
-    # 2. Hard-Coded Battle Logic
+    # Fast Battle Logic
     if action in ["Attack", "Skill"] and game_state["current_enemy"]:
-        damage = 35 if action == "Attack" else 55
-        game_state["current_enemy"]["hp"] -= damage
-        
+        game_state["current_enemy"]["hp"] -= 40
         if game_state["current_enemy"]["hp"] <= 0:
-            name = game_state["current_enemy"]["name"]
-            game_state["collection"].append(name)
             game_state["progress"] += 20
             game_state["current_enemy"] = None
-            game_state["log"] = f"Victory! {name} was captured. Move forward!"
-            
-            if game_state["progress"] >= 100 and name == "VOID MONARCH":
-                game_state["is_victory"] = True
-            
+            game_state["log"] = "Target defeated! Searching for the next challenge..."
             return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
 
-    # 3. AI Narrative Generation
-    is_boss = game_state["progress"] >= 100
+    # "Director" Prompt for High-End Visuals
     prompt = f"""
-    Acting as a Pokemon Game Master.
-    Mission: {game_state['mission']}
-    Current Progress: {game_state['progress']}%
+    Acting as an HD Pokemon Director. 
+    Progress: {game_state['progress']}%
     Action: {action}
-    
-    If Progress is 100, generate the FINAL BOSS 'VOID MONARCH'.
-    Otherwise, generate a wild encounter consistent with the mission story.
     
     Output ONLY JSON:
     {{
-        "description": "Narrative flavor text",
+        "description": "Dramatic battle text",
+        "bg_prompt": "High quality anime style battle background, {action} theme, vibrant colors",
         "enemy": {{
-            "name": "Creature Name",
-            "hp": {500 if is_boss else 100},
-            "sprite_prompt": "Pokemon pixel art style, {'ultimate cosmic boss' if is_boss else 'wild creature'}, white background"
+            "name": "Epic Monster Name",
+            "hp": 100,
+            "sprite_prompt": "Full color high-detail pokemon sprite, {action} element, white background"
         }},
         "options": ["Attack", "Skill"]
     }}
     """
     
-    try:
-        response = model.generate_content(prompt)
-        data = json.loads(response.text.strip().replace('```json', '').replace('```', ''))
-        game_state["current_enemy"] = data["enemy"]
-        game_state["log"] = data["description"]
-    except:
-        game_state["log"] = "Searching the tall grass..."
+    response = await model.generate_content_async(prompt)
+    data = json.loads(response.text.strip().replace('```json', '').replace('```', ''))
+    
+    game_state["current_enemy"] = data["enemy"]
+    game_state["log"] = data["description"]
+    game_state["bg_image"] = data["bg_prompt"]
 
+    return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
