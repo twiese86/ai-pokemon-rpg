@@ -1,5 +1,6 @@
 import os
 import json
+import urllib.parse
 import google.generativeai as genai
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
@@ -8,18 +9,16 @@ from fastapi.templating import Jinja2Templates
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# Use your universal key from Koyeb
-api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=api_key)
-# Using 2.5-flash as requested for maximum speed
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-2.5-flash')
 
-# Global state to keep track of the adventure
+# State now includes actual battle mechanics
 game_state = {
-    "hp": 100,
-    "progress": 0,
-    "log": "Use the arrow keys to explore the forest!",
-    "current_enemy": None
+    "mode": "EXPLORE",
+    "log": "Use Arrow Keys to find a challenge!",
+    "player_hp": 100,
+    "enemy": None,
+    "map_seed": 1
 }
 
 @app.get("/", response_class=HTMLResponse)
@@ -30,41 +29,42 @@ async def index(request: Request):
 async def take_action(request: Request, action: str = Form(...)):
     global game_state
     
-    # Quick math for battles so the UI feels responsive
-    if action in ["Attack", "Skill"]:
-        game_state["progress"] += 20
-        game_state["current_enemy"] = None
-        game_state["log"] = "Victory! The enemy vanished. Keep exploring!"
+    # 1. Handle Battle Logic
+    if game_state["mode"] == "BATTLE" and action not in ["Explore"]:
+        # AI decides the outcome of the specific move
+        prompt = f"Battle! Player uses {action} against {game_state['enemy']['name']}. " \
+                 f"Enemy HP: {game_state['enemy']['hp']}. Player HP: {game_state['player_hp']}. " \
+                 "Output ONLY JSON: {'damage': int, 'enemy_move': 'string', 'player_dmg': int, 'text': 'string'}"
+        
+        try:
+            res = await model.generate_content_async(prompt)
+            data = json.loads(res.text.replace('```json', '').replace('```', '').strip())
+            
+            game_state["enemy"]["hp"] -= data['damage']
+            game_state["player_hp"] -= data['player_dmg']
+            game_state["log"] = f"{data['text']} {game_state['enemy']['name']} used {data['enemy_move']}!"
+            
+            if game_state["enemy"]["hp"] <= 0:
+                game_state["mode"] = "EXPLORE"
+                game_state["log"] = f"Victory! You defeated {game_state['enemy']['name']}!"
+                game_state["enemy"] = None
+        except:
+            game_state["log"] = "The clash was intense! Try again."
+        
         return game_state
 
-    # AI narrative generation for new encounters
-    prompt = f"""
-    Acting as a Pokemon Game Master. Thomas Jr. is exploring. 
-    Mission Progress: {game_state['progress']}%
-    Action: {action}
-    
-    Output ONLY valid JSON:
-    {{
-        "text": "A short, exciting story beat!",
-        "enemy_name": "Monster Name",
-        "sprite_prompt": "pixel art monster, colorful, white background"
-    }}
-    """
+    # 2. Trigger New Encounter
+    prompt = "Create a unique Pokemon-style encounter. Output ONLY JSON: " \
+             "{'name': 'Creature', 'hp': 100, 'moves': ['Move1', 'Move2'], 'sprite': 'short visual description', 'story': 'string'}"
     
     try:
         response = await model.generate_content_async(prompt)
-        # Cleaning the AI response to prevent JSON errors
-        clean_text = response.text.replace('```json', '').replace('```', '').strip()
-        data = json.loads(clean_text)
+        data = json.loads(response.text.replace('```json', '').replace('```', '').strip())
         
-        game_state["log"] = data["text"]
-        game_state["current_enemy"] = {
-            "name": data["enemy_name"],
-            "sprite": data["sprite_prompt"],
-            "hp": 100
-        }
-    except Exception as e:
-        print(f"AI Error: {e}")
-        game_state["log"] = "You hear a rustle in the tall grass..."
-        
+        game_state["mode"] = "BATTLE"
+        game_state["enemy"] = data
+        game_state["log"] = data["story"]
+    except:
+        game_state["log"] = "Something stirs in the shadows..."
+
     return game_state
