@@ -8,65 +8,49 @@ from fastapi.templating import Jinja2Templates
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# This covers both common variable names used by different SDK versions
+# Use your universal key
 api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-
-if not api_key:
-    raise ValueError("No API Key found! Check your Koyeb Environment Variables.")
-
 genai.configure(api_key=api_key)
-# Stick with 'gemini-2.5-flash' for the best speed/logic balance
 model = genai.GenerativeModel('gemini-2.5-flash')
 
 game_state = {
-    "player": {"hp": 100, "level": 1},
+    "player": {"name": "Thomas Jr.", "hp": 100},
     "progress": 0,
     "current_enemy": None,
-    "log": "A new journey begins in high definition!",
-    "bg_image": "vibrant lush pokemon forest battle background"
+    "bg_style": "vibrant lush pokemon forest",
+    "log": "The world map is generating... welcome!"
 }
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
 
 @app.post("/action")
 async def take_action(request: Request, action: str = Form(...)):
     global game_state
     
-    # Fast Battle Logic
+    # Fast-path for battle math
     if action in ["Attack", "Skill"] and game_state["current_enemy"]:
         game_state["current_enemy"]["hp"] -= 40
         if game_state["current_enemy"]["hp"] <= 0:
             game_state["progress"] += 20
             game_state["current_enemy"] = None
-            game_state["log"] = "Target defeated! Searching for the next challenge..."
+            game_state["log"] = "Target defeated! Moving to the next sector."
             return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
 
-    # "Director" Prompt for High-End Visuals
-    prompt = f"""
-    Acting as an HD Pokemon Director. 
-    Progress: {game_state['progress']}%
-    Action: {action}
+    # AI Narrative and Sprite Generation
+    prompt = f"RPG Mode. Action: {action}. Progress: {game_state['progress']}%. Output ONLY JSON: {{'story': '...', 'bg': 'env description', 'enemy': {{'name': '...', 'hp': 100, 'sprite': 'pixel art [type] monster'}}}}"
     
-    Output ONLY JSON:
-    {{
-        "description": "Dramatic battle text",
-        "bg_prompt": "High quality anime style battle background, {action} theme, vibrant colors",
-        "enemy": {{
-            "name": "Epic Monster Name",
-            "hp": 100,
-            "sprite_prompt": "Full color high-detail pokemon sprite, {action} element, white background"
-        }},
-        "options": ["Attack", "Skill"]
-    }}
-    """
-    
-    response = await model.generate_content_async(prompt)
-    data = json.loads(response.text.strip().replace('```json', '').replace('```', ''))
-    
-    game_state["current_enemy"] = data["enemy"]
-    game_state["log"] = data["description"]
-    game_state["bg_image"] = data["bg_prompt"]
+    try:
+        response = await model.generate_content_async(prompt)
+        # Robust parsing to avoid 500 errors
+        text = response.text.replace('```json', '').replace('```', '').strip()
+        data = json.loads(text)
+        
+        game_state["log"] = data["story"]
+        game_state["bg_style"] = data["bg"]
+        game_state["current_enemy"] = data["enemy"]
+    except Exception as e:
+        game_state["log"] = "The tall grass rustles..."
 
-    return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
-
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
