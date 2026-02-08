@@ -8,49 +8,41 @@ from fastapi.templating import Jinja2Templates
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# Use your universal key
+# Universal Key Support
 api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel('gemini-2.5-flash')
 
 game_state = {
-    "player": {"name": "Thomas Jr.", "hp": 100},
-    "progress": 0,
+    "mode": "MAP", # MAP or BATTLE
+    "player_pos": {"x": 200, "y": 200},
+    "map_theme": "vibrant lush pixel art pokemon world map top down",
     "current_enemy": None,
-    "bg_style": "vibrant lush pokemon forest",
-    "log": "The world map is generating... welcome!"
+    "collection": []
 }
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
 
-@app.post("/action")
-async def take_action(request: Request, action: str = Form(...)):
+@app.post("/encounter")
+async def trigger_encounter(request: Request):
     global game_state
-    
-    # Fast-path for battle math
-    if action in ["Attack", "Skill"] and game_state["current_enemy"]:
-        game_state["current_enemy"]["hp"] -= 40
-        if game_state["current_enemy"]["hp"] <= 0:
-            game_state["progress"] += 20
-            game_state["current_enemy"] = None
-            game_state["log"] = "Target defeated! Moving to the next sector."
-            return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
-
-    # AI Narrative and Sprite Generation
-    prompt = f"RPG Mode. Action: {action}. Progress: {game_state['progress']}%. Output ONLY JSON: {{'story': '...', 'bg': 'env description', 'enemy': {{'name': '...', 'hp': 100, 'sprite': 'pixel art [type] monster'}}}}"
+    prompt = f"RPG Mode. Create a wild encounter for a {game_state['map_theme']}. Return ONLY JSON: {{'story': '...', 'enemy': {{'name': '...', 'hp': 100, 'sprite': 'pixel art monster'}}}}"
     
     try:
         response = await model.generate_content_async(prompt)
-        # Robust parsing to avoid 500 errors
-        text = response.text.replace('```json', '').replace('```', '').strip()
-        data = json.loads(text)
-        
-        game_state["log"] = data["story"]
-        game_state["bg_style"] = data["bg"]
+        data = json.loads(response.text.replace('```json', '').replace('```', '').strip())
+        game_state["mode"] = "BATTLE"
         game_state["current_enemy"] = data["enemy"]
-    except Exception as e:
-        game_state["log"] = "The tall grass rustles..."
+        game_state["log"] = data["story"]
+    except:
+        game_state["mode"] = "MAP" # Fallback if AI fails
+        
+    return game_state
 
-    return templates.TemplateResponse("index.html", {"request": request, "state": game_state})
+@app.post("/reset")
+async def reset_to_map():
+    game_state["mode"] = "MAP"
+    game_state["current_enemy"] = None
+    return {"status": "ok"}
