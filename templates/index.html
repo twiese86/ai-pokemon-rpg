@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI POKEMON RPG</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Press Start 2P', cursive; background: #0f0c29; color: #fff; }
+        .screen { background: #9dbb7d; color: #081820; padding: 15px; border: 10px solid #555; image-rendering: pixelated; }
+        .pixelated { image-rendering: pixelated; width: 220px; height: 220px; mix-blend-mode: multiply; }
+    </style>
+</head>
+<body class="flex flex-col items-center py-10">
+    <div class="w-full max-w-md mb-4">
+        <p class="text-[8px] mb-1">MISSION PROGRESS: {{ state.progress }}%</p>
+        <div class="w-full bg-gray-800 h-2 border border-white"><div class="bg-blue-400 h-full" style="width: {{ state.progress }}%"></div></div>
+    </div>
+
+    <div class="screen w-[400px] shadow-2xl rounded-3xl">
+        {% if state.is_victory %}
+            <div class="text-center py-10">
+                <h1 class="text-xl mb-4">VICTORY!</h1>
+                <p class="text-[10px]">The World is Saved.</p>
+                <form action="/action" method="post"><button name="action" value="Restart" class="mt-10 border-2 border-black p-2">NEW GAME</button></form>
+            </div>
+        {% else %}
+            <div class="flex flex-col items-end h-56">
+                {% if state.current_enemy %}
+                    <div class="bg-white border-2 border-black p-1 text-[8px] w-32 mb-2">
+                        <p>{{ state.current_enemy.name }}</p>
+                        <div class="w-full bg-gray-300 h-1 mt-1"><div class="bg-red-600 h-full" style="width: {{ (state.current_enemy.hp / 5) if state.progress >= 100 else state.current_enemy.hp }}%"></div></div>
+                    </div>
+                    <img src="https://pollinations.ai/p/{{ state.current_enemy.sprite_prompt|urlencode }}?width=300&height=300" class="pixelated">
+                {% else %}
+                    <div class="h-full flex items-center text-[10px]">WALKING...</div>
+                {% endif %}
+            </div>
+
+            <div class="bg-[#e0f8d0] border-4 border-black p-3 mt-4 h-32 text-[9px] flex flex-col justify-between">
+                <p>{{ state.log }}</p>
+                <form action="/action" method="post" class="grid grid-cols-2 gap-2">
+                    {% if state.current_enemy %}
+                        <button name="action" value="Attack" class="border-2 border-black hover:bg-black hover:text-white p-1">ATTACK</button>
+                        <button name="action" value="Skill" class="border-2 border-black hover:bg-black hover:text-white p-1">SKILL</button>
+                    {% else %}
+                        <button name="action" value="Travel" class="col-span-2 border-2 border-black p-1">CONTINUE JOURNEY</button>
+                    {% endif %}
+                </form>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
