@@ -1,53 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI POKEMON RPG</title>
+    <title>AI POKEMON HD</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Press Start 2P', cursive; background: #0f0c29; color: #fff; }
-        .screen { background: #9dbb7d; color: #081820; padding: 15px; border: 10px solid #555; image-rendering: pixelated; }
-        .pixelated { image-rendering: pixelated; width: 220px; height: 220px; mix-blend-mode: multiply; }
+        @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@700&display=swap');
+        body { font-family: 'Lexend', sans-serif; background: #1a1c2c; }
+        .battle-scene { 
+            background-image: url('https://pollinations.ai/p/{{ state.bg_image|urlencode }}?width=800&height=400');
+            background-size: cover;
+            background-position: center;
+        }
+        .sprite { filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5)); }
     </style>
 </head>
-<body class="flex flex-col items-center py-10">
-    <div class="w-full max-w-md mb-4">
-        <p class="text-[8px] mb-1">MISSION PROGRESS: {{ state.progress }}%</p>
-        <div class="w-full bg-gray-800 h-2 border border-white"><div class="bg-blue-400 h-full" style="width: {{ state.progress }}%"></div></div>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-2xl mb-4 bg-gray-900/50 p-2 rounded-full border border-white/10">
+        <div class="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-1000" style="width: {{ state.progress }}%"></div>
     </div>
 
-    <div class="screen w-[400px] shadow-2xl rounded-3xl">
-        {% if state.is_victory %}
-            <div class="text-center py-10">
-                <h1 class="text-xl mb-4">VICTORY!</h1>
-                <p class="text-[10px]">The World is Saved.</p>
-                <form action="/action" method="post"><button name="action" value="Restart" class="mt-10 border-2 border-black p-2">NEW GAME</button></form>
-            </div>
-        {% else %}
-            <div class="flex flex-col items-end h-56">
-                {% if state.current_enemy %}
-                    <div class="bg-white border-2 border-black p-1 text-[8px] w-32 mb-2">
-                        <p>{{ state.current_enemy.name }}</p>
-                        <div class="w-full bg-gray-300 h-1 mt-1"><div class="bg-red-600 h-full" style="width: {{ (state.current_enemy.hp / 5) if state.progress >= 100 else state.current_enemy.hp }}%"></div></div>
-                    </div>
-                    <img src="https://pollinations.ai/p/{{ state.current_enemy.sprite_prompt|urlencode }}?width=300&height=300" class="pixelated">
-                {% else %}
-                    <div class="h-full flex items-center text-[10px]">WALKING...</div>
-                {% endif %}
-            </div>
+    <div class="w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl border-8 border-gray-800">
+        <div class="battle-scene h-64 flex items-center justify-center relative p-8">
+            {% if state.current_enemy %}
+                <div class="absolute top-4 left-4 bg-white/90 p-2 rounded-lg shadow-lg border-2 border-gray-800 w-40">
+                    <p class="text-[10px] uppercase font-bold">{{ state.current_enemy.name }}</p>
+                    <div class="w-full bg-gray-200 h-2 mt-1 rounded-full"><div class="bg-red-500 h-full rounded-full" style="width: {{ state.current_enemy.hp }}%"></div></div>
+                </div>
+                <img src="https://pollinations.ai/p/{{ state.current_enemy.sprite_prompt|urlencode }}?width=400&height=400" class="w-48 h-48 sprite">
+            {% else %}
+                <div class="bg-black/50 text-white px-6 py-2 rounded-full backdrop-blur-sm animate-pulse">Scanning Horizon...</div>
+            {% endif %}
+        </div>
 
-            <div class="bg-[#e0f8d0] border-4 border-black p-3 mt-4 h-32 text-[9px] flex flex-col justify-between">
-                <p>{{ state.log }}</p>
-                <form action="/action" method="post" class="grid grid-cols-2 gap-2">
-                    {% if state.current_enemy %}
-                        <button name="action" value="Attack" class="border-2 border-black hover:bg-black hover:text-white p-1">ATTACK</button>
-                        <button name="action" value="Skill" class="border-2 border-black hover:bg-black hover:text-white p-1">SKILL</button>
-                    {% else %}
-                        <button name="action" value="Travel" class="col-span-2 border-2 border-black p-1">CONTINUE JOURNEY</button>
-                    {% endif %}
-                </form>
+        <div class="bg-gray-100 p-6 border-t-4 border-gray-800">
+            <div class="bg-white border-2 border-gray-300 p-4 rounded-xl mb-4 min-h-[80px]">
+                <p class="text-gray-800 text-sm italic">"{{ state.log }}"</p>
             </div>
-        {% endif %}
+            
+            <form action="/action" method="post" class="grid grid-cols-2 gap-4">
+                {% if state.current_enemy %}
+                    <button name="action" value="Attack" class="bg-red-500 hover:bg-red-600 text-white py-4 rounded-xl shadow-lg transform active:scale-95 transition">ATTACK</button>
+                    <button name="action" value="Skill" class="bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl shadow-lg transform active:scale-95 transition">ELEMENTAL SKILL</button>
+                {% else %}
+                    <button name="action" value="Travel" class="col-span-2 bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl shadow-lg animate-bounce">CONTINUE JOURNEY</button>
+                {% endif %}
+            </form>
+        </div>
     </div>
 </body>
 </html>
