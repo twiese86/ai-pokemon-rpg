@@ -1,99 +1,80 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI MONSTER WORLD</title>
+    <title>AI POKEMON RPG</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Press Start 2P', cursive; background: #1a1a2e; color: #fff; overflow: hidden; }
-        #gameWorld { 
-            background: url('https://pollinations.ai/p/vibrant-pixel-art-pokemon-forest-map?width=1024&height=512&seed=123') center;
-            background-size: cover; height: 60vh; position: relative; border-bottom: 8px solid #000;
-        }
-        #player { width: 64px; height: 64px; position: absolute; transition: all 0.1s; image-rendering: pixelated; z-index: 10; }
-        .walking { animation: bounce 0.3s infinite; }
-        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        .battle-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 50; flex-direction: column; align-items: center; justify-content: center; }
+        body { font-family: 'Press Start 2P', cursive; background: #0f172a; color: #fff; overflow: hidden; }
+        .world { background: url('https://pollinations.ai/p/vibrant-pixel-art-forest-landscape?width=1024&height=512&seed=5') center; background-size: cover; height: 50vh; position: relative; border-bottom: 4px solid #fff; }
+        #player { width: 64px; height: 64px; position: absolute; transition: all 0.1s; image-rendering: pixelated; }
+        .battle-ui { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; flex-direction: column; align-items: center; justify-content: center; }
+        .active { display: flex !important; }
     </style>
 </head>
 <body>
-    <div id="gameWorld">
-        <img id="player" src="https://pollinations.ai/p/pixel-art-boy-trainer-sprite-walking?width=64&height=64&nologo=true" style="top: 50%; left: 50%;">
+    <div class="world" id="world">
+        <img id="player" src="https://pollinations.ai/p/pixel-art-trainer-front?width=64&height=64&nologo=true" style="top: 50%; left: 50%;">
     </div>
 
-    <div id="battleOverlay" class="battle-overlay p-10 text-center">
-        <h2 id="enemyTitle" class="text-xl mb-4 text-red-500"></h2>
-        <div class="bg-white/10 p-4 rounded-xl mb-6">
-            <img id="enemySprite" src="" class="w-48 h-48 mx-auto animate-pulse">
+    <div id="battleBox" class="battle-ui p-6">
+        <div class="bg-white text-black p-4 rounded-lg border-4 border-blue-500 mb-4 w-80">
+            <p id="enemyName" class="text-[8px] mb-2"></p>
+            <div class="w-full bg-gray-300 h-2"><div id="enemyBar" class="bg-green-500 h-full"></div></div>
         </div>
-        <div class="flex gap-4">
-            <button onclick="doBattle('Attack')" class="bg-red-600 hover:bg-red-700 p-4 text-[10px] border-b-4 border-red-900">ATTACK</button>
-            <button onclick="doBattle('Skill')" class="bg-blue-600 hover:bg-blue-700 p-4 text-[10px] border-b-4 border-blue-900">SKILL</button>
-        </div>
+        <img id="enemySprite" src="" class="w-48 h-48 mb-6 animate-bounce">
+        <div id="moveContainer" class="grid grid-cols-2 gap-2 w-full max-w-sm"></div>
     </div>
 
-    <div class="p-6 bg-slate-900 h-[40vh] border-t-4 border-slate-700">
-        <div class="mb-4 text-blue-400 text-[8px]">PROGRESS: <span id="progText">0</span>%</div>
-        <div id="log" class="text-[10px] leading-loose">Use ARROW KEYS to explore! A wild encounter will trigger as you walk.</div>
+    <div class="p-6 bg-slate-900 h-[50vh]">
+        <div class="text-[8px] text-green-400 mb-2">PLAYER HP: <span id="pHP">100</span></div>
+        <div id="log" class="text-[10px] leading-relaxed mb-4">Arrows to walk. Find the monsters!</div>
     </div>
 
     <script>
-        const player = document.getElementById('player');
-        const battleOverlay = document.getElementById('battleOverlay');
         let x = 50, y = 50, steps = 0, isBattling = false;
+        const player = document.getElementById('player');
 
         window.addEventListener('keydown', (e) => {
             if (isBattling) return;
-            player.classList.add('walking');
-            if(e.key === "ArrowUp") y -= 2;
-            if(e.key === "ArrowDown") y += 2;
-            if(e.key === "ArrowLeft") x -= 2;
-            if(e.key === "ArrowRight") x += 2;
-            
-            // Keep player on screen
-            x = Math.max(5, Math.min(95, x));
-            y = Math.max(5, Math.min(95, y));
-            
-            player.style.top = y + "%"; 
-            player.style.left = x + "%";
-            
+            if(e.key === "ArrowUp") y -= 3;
+            if(e.key === "ArrowDown") y += 3;
+            if(e.key === "ArrowLeft") x -= 3;
+            if(e.key === "ArrowRight") x += 3;
+            player.style.top = y + "%"; player.style.left = x + "%";
             steps++;
-            if (steps > 25) { steps = 0; triggerEncounter(); }
+            if(steps > 20) { steps = 0; sendAction('Explore'); }
         });
 
-        window.addEventListener('keyup', () => player.classList.remove('walking'));
-
-        async function triggerEncounter() {
-            isBattling = true;
-            document.getElementById('log').innerText = "Scanning for enemies...";
-            
-            const formData = new FormData();
-            formData.append('action', 'Explore');
-            
-            const res = await fetch('/action', { method: 'POST', body: formData });
-            const data = await res.json();
-            
-            if (data.current_enemy) {
-                document.getElementById('enemyTitle').innerText = data.current_enemy.name;
-                document.getElementById('enemySprite').src = `https://pollinations.ai/p/${encodeURIComponent(data.current_enemy.sprite)}?width=300&height=300&model=turbo`;
-                battleOverlay.style.display = 'flex';
-                document.getElementById('log').innerText = data.log;
-            } else {
-                isBattling = false;
-            }
+        async function sendAction(act) {
+            const body = new URLSearchParams({'action': act});
+            const res = await fetch('/action', {method: 'POST', body});
+            const state = await res.json();
+            updateUI(state);
         }
 
-        async function doBattle(act) {
-            const formData = new FormData();
-            formData.append('action', act);
+        function updateUI(state) {
+            document.getElementById('log').innerText = state.log;
+            document.getElementById('pHP').innerText = state.player_hp;
             
-            const res = await fetch('/action', { method: 'POST', body: formData });
-            const data = await res.json();
-            
-            document.getElementById('progText').innerText = data.progress;
-            document.getElementById('log').innerText = data.log;
-            battleOverlay.style.display = 'none';
-            isBattling = false;
+            if (state.mode === "BATTLE") {
+                isBattling = true;
+                document.getElementById('battleBox').classList.add('active');
+                document.getElementById('enemyName').innerText = state.enemy.name;
+                document.getElementById('enemyBar').style.width = state.enemy.hp + "%";
+                // Fixed Image URL Generation
+                const prompt = encodeURIComponent(state.enemy.sprite + " pokemon style white background");
+                document.getElementById('enemySprite').src = `https://pollinations.ai/p/${prompt}?width=400&height=400&nologo=true&seed=${Math.random()}`;
+                
+                const mc = document.getElementById('moveContainer');
+                mc.innerHTML = '';
+                state.enemy.moves.forEach(m => {
+                    mc.innerHTML += `<button onclick="sendAction('${m}')" class="bg-blue-600 p-2 text-[8px] border-b-4 border-blue-900">${m}</button>`;
+                });
+            } else {
+                isBattling = false;
+                document.getElementById('battleBox').classList.remove('active');
+            }
         }
     </script>
 </body>
